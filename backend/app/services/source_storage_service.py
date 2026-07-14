@@ -16,6 +16,7 @@ from app.utils.file_storage import save_contract_file
 
 
 def sharepoint_storage_enabled() -> bool:
+    return False  # SharePoint desactive : stockage 100% local (on-prem)
     return all(
         [
             settings.sharepoint_tenant_id,
