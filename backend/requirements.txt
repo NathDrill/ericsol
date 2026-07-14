@@ -1,0 +1,25 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+SQLAlchemy==2.0.29
+alembic==1.13.1
+psycopg2-binary==2.9.9
+python-multipart==0.0.9
+python-dotenv==1.0.1
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+python-jose[cryptography]==3.3.0
+email-validator==2.1.1
+pydantic[email]==2.7.1
+pydantic-settings==2.2.1
+apscheduler==3.10.4
+openai==1.45.0
+# Pin httpx to a version compatible with OpenAI SDK
+httpx==0.27.2
+pytz
+google-auth==2.36.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.154.0
+pypdf==4.2.0
+pdfminer.six==20231228
+rapidfuzz==3.7.0
+orjson==3.10.0

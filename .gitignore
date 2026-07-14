@@ -1,0 +1,16 @@
+# Secrets & données (restent sur chaque machine)
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+# Environnement Python
+backend/.venv/
+__pycache__/
+*.pyc
+# Données runtime / uploads
+backend/storage/
+# Node
+node_modules/
+frontend/node_modules/
+.DS_Store
