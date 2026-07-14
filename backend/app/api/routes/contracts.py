@@ -33,6 +33,21 @@ from app.models.notification import NotificationLog
 from app.services.ai_settings_service import get_ai_settings
 from app.services.ai_service import _parse_date as _parse_date_util, _parse_days as _parse_days_util, _compute_next_deadline as _compute_next_deadline_util
 
+def _anchor_from_checklist(checklist):
+    """Date d'ancrage de secours (date object) tiree du checklist quand effective_date est absente."""
+    try:
+        dates = ((checklist or {}).get('duration_echeances') or {}).get('dates') or {}
+        for key in ('effective_date', 'signature_date', 'anniversary_date', 'initial_term_end_date', 'termination_deadline'):
+            v = dates.get(key)
+            if isinstance(v, str) and len(v) >= 8:
+                iso = _parse_date_util(v)
+                if iso:
+                    y, m, d = map(int, iso.split('-'))
+                    return date(y, m, d)
+    except Exception:
+        pass
+    return None
+
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
 
@@ -801,11 +816,14 @@ def cancellation_windows(filter_current: bool = True, horizon_months: int = 24, 
         notice = c.notice_period_days or 30
         checklist = _contract_checklist(c)
         legal_entity = _extract_legal_entity(c, checklist)
-        # Point de départ et pas de reconduction
-        if c.renewal_months and c.effective_date:
+        # Robustesse resiliations : deriver la recurrence + une date d'ancrage si absentes
+        _REC = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12, "biannual": 24}
+        rmonths = c.renewal_months or _REC.get((c.recurrence or "").lower()) or (12 if c.has_auto_renewal else None)
+        base = c.effective_date or _anchor_from_checklist(checklist)
+        # Point de départ et pas de reconduction (robuste)
+        if rmonths and base:
             # Générer toutes les échéances sur l'horizon
-            period = c.renewal_months
-            base = c.effective_date
+            period = rmonths
             n = 1
             while True:
                 due = _add_months(base, n*period)
