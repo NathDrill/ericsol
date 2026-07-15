@@ -1,7 +1,7 @@
 // login.js — écran de connexion.
-import { el, mount } from '../dom.js';
-import { api, ApiError } from '../api.js';
-import { setSession, getSession } from '../store.js';
+import { el, mount } from '../dom.js?v=2';
+import { api, ApiError } from '../api.js?v=2';
+import { setSession, getSession } from '../store.js?v=2';
 
 export async function renderLogin(root, onSuccess) {
   if (getSession()) { onSuccess(); return; }

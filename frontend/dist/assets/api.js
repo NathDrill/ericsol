@@ -1,5 +1,5 @@
 // api.js — client HTTP unique. Même origine (connect-src 'self'), Bearer token, gestion 401.
-import { getToken, clearSession } from './store.js';
+import { getToken, clearSession } from './store.js?v=2';
 
 const BASE = '/api';
 
@@ -63,6 +63,7 @@ export const api = {
   updateContract: (id, body) => request('PUT', `/contracts/${encodeURIComponent(id)}`, { body }),
   analyzePdf: (file) => { const fd = new FormData(); fd.append('file', file); return request('POST', '/contracts/analyze-pdf', { form: fd }); },
   downloadUrl: (id) => `${BASE}/contracts/${encodeURIComponent(id)}/download`,
+  downloadRaw: (id) => request('GET', `/contracts/${encodeURIComponent(id)}/download`, { raw: true, query: { inline: 'true' } }),
   qaAsk: (id, question) => { const form = new URLSearchParams(); form.set('question', question); return request('POST', `/contracts/${encodeURIComponent(id)}/qa`, { form }); },
   qaGlobal: (question, history) => request('POST', '/ai/qa', { body: { question, history } }),
 

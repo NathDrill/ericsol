@@ -1,8 +1,8 @@
 // dashboard.js — vue d'ensemble : indicateurs, top fournisseurs, prochaines échéances de résiliation.
-import { el, mount, money, moneyPrecise, dateFR, daysUntil, icon } from '../dom.js';
-import { api } from '../api.js';
-import { spinner, errorState, pageHeader, statusBadge } from '../ui.js';
-import { navigate } from '../router.js';
+import { el, mount, money, moneyPrecise, dateFR, daysUntil, icon } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { spinner, errorState, pageHeader, statusBadge } from '../ui.js?v=2';
+import { navigate } from '../router.js?v=2';
 
 const STATUS_LABEL = { actif: 'Actifs', a_resilier: 'À résilier', deadline_depassee: 'Échéance dépassée', resilie: 'Résiliés', expire: 'Expirés' };
 

@@ -3,10 +3,10 @@
 //   temps 2 : checklist de conformité (12 points) qui s'affiche ensuite, sans clic.
 // Le rendu est piloté par renderKeyFields() puis renderChecklist(), séparés, pour que
 // le jour où le back renvoie les deux phases séparément, ce soit un simple branchement.
-import { el, mount, clear, money, dateFR } from '../dom.js';
-import { api } from '../api.js';
-import { toast, spinner, thinkingBar } from '../ui.js';
-import { renderChecklist } from './checklist.js';
+import { el, mount, clear, money, dateFR } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { toast, spinner, thinkingBar } from '../ui.js?v=2';
+import { renderChecklist } from './checklist.js?v=2';
 
 const MAX_MB = 25;
 

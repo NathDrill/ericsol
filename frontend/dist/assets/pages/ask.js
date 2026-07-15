@@ -1,9 +1,9 @@
 // ask.js — « Poser une question » : chat global sur l'ensemble du portefeuille.
 // L'IA (Mistral local) reçoit les données croisées de la base et répond en tenant compte
 // de l'historique de conversation. Rendu 100% textContent (jamais d'innerHTML avec données).
-import { el, mount, icon } from '../dom.js';
-import { api } from '../api.js';
-import { pageHeader } from '../ui.js';
+import { el, mount, icon } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { pageHeader } from '../ui.js?v=2';
 
 // Historique conservé au niveau module : survit aux navigations, pas au rechargement.
 const history = [];

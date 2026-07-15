@@ -1,9 +1,9 @@
 // contract-detail.js — fiche contrat. Champs clés (temps 1) puis checklist (temps 2), Q&A, actions.
-import { el, mount, clear, money, moneyPrecise, dateFR, daysUntil } from '../dom.js';
-import { api } from '../api.js';
-import { spinner, errorState, statusBadge, toast, thinkingBar } from '../ui.js';
-import { navigate } from '../router.js';
-import { renderChecklist } from './checklist.js';
+import { el, mount, clear, money, moneyPrecise, dateFR, daysUntil } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { spinner, errorState, statusBadge, toast, thinkingBar } from '../ui.js?v=2';
+import { navigate } from '../router.js?v=2';
+import { renderChecklist } from './checklist.js?v=2';
 
 export async function renderContractDetail(host, params) {
   mount(host, spinner('Chargement du contrat…'));
@@ -13,8 +13,28 @@ export async function renderContractDetail(host, params) {
 
   const back = el('a', { class: 'link back-link', href: '#/contracts', text: '← Contrats' });
 
+  // Le PDF est servi par une route authentifiée : on le récupère en blob (Bearer) —
+  // un simple <a href> n'enverrait pas le jeton (401).
+  async function fetchPdfBlobUrl() {
+    const res = await api.downloadRaw(c.id);
+    return URL.createObjectURL(await res.blob());
+  }
+  async function downloadPdf(e) {
+    const btn = e.target; btn.disabled = true;
+    try {
+      const url = await fetchPdfBlobUrl();
+      const a = el('a', { attrs: { href: url, download: c.source_filename || 'contrat-' + c.id + '.pdf' } });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) { toast('Téléchargement impossible : ' + err.message, 'error'); }
+    finally { btn.disabled = false; }
+  }
+
+  const viewer = pdfViewer(c, fetchPdfBlobUrl);
+
   const actions = el('div', { class: 'page-actions' }, [
-    el('a', { class: 'btn btn-ghost', href: api.downloadUrl(c.id), attrs: { target: '_blank', rel: 'noopener' }, text: 'Télécharger le PDF' }),
+    c.source_filename ? el('button', { class: 'btn btn-primary', text: 'Visualiser le PDF', onClick: () => viewer.open() }) : null,
+    c.source_filename ? el('button', { class: 'btn btn-ghost', text: 'Télécharger', onClick: downloadPdf }) : null,
     c.status !== 'resilie'
       ? el('button', { class: 'btn btn-danger', text: 'Marquer comme résilié', onClick: async (e) => {
           e.target.disabled = true;
@@ -75,11 +95,40 @@ export async function renderContractDetail(host, params) {
       ]),
       actions,
     ]),
+    viewer.cardEl,
     keyFields,
     annexes,
     qaCard(c),
     checklistCard,
   ]));
+}
+
+// Visionneuse PDF intégrée (iframe sur blob URL, chargée au premier affichage).
+function pdfViewer(c, fetchPdfBlobUrl) {
+  const frameHost = el('div', { class: 'pdf-frame-host' });
+  const cardEl = el('section', { class: 'card pdf-card', style: { display: 'none' } }, [
+    el('div', { class: 'card-head' }, [
+      el('h2', { class: 'card-title', text: c.source_filename || 'Document' }),
+      el('button', { class: 'icon-btn', text: '✕', onClick: () => { cardEl.style.display = 'none'; }, attrs: { 'aria-label': 'Fermer l’aperçu' } }),
+    ]),
+    frameHost,
+  ]);
+  let loaded = false;
+  async function open() {
+    const wasHidden = cardEl.style.display === 'none';
+    cardEl.style.display = '';
+    if (wasHidden) cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (loaded) return;
+    mount(frameHost, spinner('Chargement du document…'));
+    try {
+      const url = await fetchPdfBlobUrl();
+      mount(frameHost, el('iframe', { class: 'pdf-frame', attrs: { src: url, title: 'Aperçu du contrat' } }));
+      loaded = true;
+    } catch (err) {
+      mount(frameHost, el('p', { class: 'form-error', text: 'Impossible de charger le PDF : ' + err.message }));
+    }
+  }
+  return { cardEl, open };
 }
 
 function qaCard(c) {

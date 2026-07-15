@@ -1,5 +1,5 @@
 // ui.js — composants réutilisables (toasts, spinner, badges, états vides).
-import { el, mount } from './dom.js';
+import { el, mount } from './dom.js?v=2';
 
 export function spinner(label = 'Chargement…') {
   return el('div', { class: 'loading' }, [el('div', { class: 'spinner' }), el('span', { text: label })]);

@@ -218,6 +218,15 @@ def load_source_file(
     sharepoint_item_id: str | None = None,
     sharepoint_drive_id: str | None = None,
 ) -> dict:
+    # Local-first (souverainete) : si le fichier existe sur disque on le sert,
+    # sans jamais tenter Graph/SharePoint (neutralise).
+    if source_filename:
+        _local_path = os.path.join(settings.storage_dir, source_filename)
+        if os.path.exists(_local_path):
+            _mime = mimetypes.guess_type(source_filename)[0] or "application/octet-stream"
+            with open(_local_path, "rb") as _fh:
+                _content = _fh.read()
+            return {"filename": source_filename, "content": _content, "mime_type": _mime, "web_url": None}
     if source_storage == "sharepoint" and sharepoint_item_id:
         token = _graph_token()
         target_drive = sharepoint_drive_id or settings.sharepoint_drive_id

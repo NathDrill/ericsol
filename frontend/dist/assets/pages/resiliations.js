@@ -1,8 +1,8 @@
 // resiliations.js — fenêtres de résiliation à venir (calculées côté back : préavis + reconduction).
-import { el, mount, dateFR, daysUntil } from '../dom.js';
-import { api } from '../api.js';
-import { spinner, errorState, pageHeader, statusBadge, toast } from '../ui.js';
-import { navigate } from '../router.js';
+import { el, mount, dateFR, daysUntil } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { spinner, errorState, pageHeader, statusBadge, toast } from '../ui.js?v=2';
+import { navigate } from '../router.js?v=2';
 
 let horizon = 24;
 

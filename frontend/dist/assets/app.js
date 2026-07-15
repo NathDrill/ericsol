@@ -1,14 +1,14 @@
 // app.js — bootstrap, layout applicatif (sidebar + topbar), garde d'authentification, table de routage.
-import { el, mount, clear, icon } from './dom.js';
-import { getSession, getUser, clearSession } from './store.js';
-import { route, setNotFound, setOnNavigate, startRouter, navigate, currentPath } from './router.js';
-import { renderLogin } from './pages/login.js';
-import { renderDashboard } from './pages/dashboard.js';
-import { renderContracts } from './pages/contracts.js';
-import { renderContractDetail } from './pages/contract-detail.js';
-import { renderResiliations } from './pages/resiliations.js';
-import { renderVendors } from './pages/vendors.js';
-import { renderAsk } from './pages/ask.js';
+import { el, mount, clear, icon } from './dom.js?v=2';
+import { getSession, getUser, clearSession } from './store.js?v=2';
+import { route, setNotFound, setOnNavigate, startRouter, navigate, currentPath } from './router.js?v=2';
+import { renderLogin } from './pages/login.js?v=2';
+import { renderDashboard } from './pages/dashboard.js?v=2';
+import { renderContracts } from './pages/contracts.js?v=2';
+import { renderContractDetail } from './pages/contract-detail.js?v=2';
+import { renderResiliations } from './pages/resiliations.js?v=2';
+import { renderVendors } from './pages/vendors.js?v=2';
+import { renderAsk } from './pages/ask.js?v=2';
 
 const root = document.getElementById('app');
 

@@ -1,7 +1,7 @@
 // vendors.js — fournisseurs classés par dépense (MRR / ARR).
-import { el, mount, money, moneyPrecise } from '../dom.js';
-import { api } from '../api.js';
-import { spinner, errorState, pageHeader } from '../ui.js';
+import { el, mount, money, moneyPrecise } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { spinner, errorState, pageHeader } from '../ui.js?v=2';
 
 let metric = 'mrr';
 

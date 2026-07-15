@@ -1,6 +1,6 @@
 // checklist.js — rendu de la checklist de conformité (dict imbriqué renvoyé par le LLM).
 // Rendu récursif 100% textContent : robuste à une structure inconnue, aucune injection possible.
-import { el } from '../dom.js';
+import { el } from '../dom.js?v=2';
 
 const LABELS = {
   duration_echeances: 'Durée & échéances', dates: 'Dates clés',

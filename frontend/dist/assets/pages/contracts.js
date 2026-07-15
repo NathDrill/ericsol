@@ -1,9 +1,9 @@
 // contracts.js — liste des contrats : recherche, filtre par statut, tri, upload+analyse PDF.
-import { el, mount, money, dateFR, icon } from '../dom.js';
-import { api } from '../api.js';
-import { spinner, errorState, pageHeader, statusBadge, toast } from '../ui.js';
-import { navigate } from '../router.js';
-import { openAnalyzePanel } from './analyze.js';
+import { el, mount, money, dateFR, icon } from '../dom.js?v=2';
+import { api } from '../api.js?v=2';
+import { spinner, errorState, pageHeader, statusBadge, toast } from '../ui.js?v=2';
+import { navigate } from '../router.js?v=2';
+import { openAnalyzePanel } from './analyze.js?v=2';
 
 const STATUS_FILTERS = [
   { k: 'all', label: 'Tous' }, { k: 'actif', label: 'Actifs' },
