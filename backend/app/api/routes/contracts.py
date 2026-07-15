@@ -7,6 +7,8 @@ from app.models.sharepoint_analysis import SharePointAnalysis
 from app.schemas.contracts import ContractsResponse, ContractIn, ContractOut, ContractUpdate
 from app.models.category import Category
 from app.services.contract_service import refresh_contract_statuses, indicators, create_contract
+from app.services.ai_service import build_ai_response as _build_ai_response, _normalize_recurrence as _normalize_recurrence_util
+from app.services.ai_service import contract_qa as _contract_qa_local, _use_local_llm as _use_local_llm_qa
 from app.utils.file_storage import save_contract_file
 from app.services.source_storage_service import (
     create_sharepoint_list_item,
@@ -759,14 +761,33 @@ def analyze_pdf(file: UploadFile = File(...), db: Session = Depends(get_db), use
     data = file.file.read()
     filename = file.filename or "contrat.pdf"
     stored = store_source_file(filename, data, uploaded_by_email=getattr(user, "email", None))
-    return {
-        "source_filename": stored["source_filename"],
-        "source_storage": stored["source_storage"],
-        "sharepoint_item_id": stored["sharepoint_item_id"],
-        "sharepoint_drive_id": stored["sharepoint_drive_id"],
-        "sharepoint_web_url": stored["sharepoint_web_url"],
-        "processing_status": "uploaded",
-    }
+    # Extraction du texte (pypdf) puis analyse par le LLM on-prem (Mistral). Aucune donnee ne sort.
+    text = ""
+    try:
+        reader = PdfReader(BytesIO(data))
+        for page in reader.pages:
+            text += (page.extract_text() or "") + "\n"
+    except Exception:
+        text = ""
+    try:
+        analysis = _build_ai_response(text, db, file_path=None) or {}
+    except Exception:
+        analysis = {}
+    title = analysis.get("contract_label") or filename
+    contract = create_contract(
+        db,
+        title=str(title)[:255],
+        amount=0.0,
+        recurrence=_normalize_recurrence_util(analysis.get("recurrence") or "monthly"),
+        source_storage=stored["source_storage"],
+        source_filename=stored["source_filename"],
+        source_text=(text or "")[:20000],
+    )
+    # Mapping analyse -> champs du contrat (meme logique que le flux d'analyse existant)
+    _apply_cached_sharepoint_analysis(contract, analysis, overwrite=True)
+    db.commit()
+    db.refresh(contract)
+    return _serialize_contract(contract)
 
 
 @router.post("/analyze-batch")
@@ -1080,6 +1101,10 @@ def qa_contract(contract_id: int, question: str = Form(...), db: Session = Depen
     clean_question = (question or "").strip()
     if not clean_question:
         raise HTTPException(status_code=400, detail="question is required")
+
+    if _use_local_llm_qa():
+        answer = _contract_qa_local(clean_question, obj, db)
+        return {"mode": "local", "status": "answered", "ready": True, "answer": answer}
 
     if not obj.sharepoint_item_id or not obj.sharepoint_drive_id:
         return {

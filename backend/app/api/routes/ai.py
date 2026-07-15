@@ -3,9 +3,11 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.services.ai_service import portfolio_qa, _use_local_llm
 from app.services.source_storage_service import create_sharepoint_list_item, get_sharepoint_list_item
 
 from .auth import get_current_user
@@ -91,22 +93,34 @@ def _portfolio_status_payload(*, request_id: str, status: str, answer: str | Non
 
 @router.api_route("/qa", methods=["GET", "POST"])
 async def qa_global(request: Request, question: str | None = None, q: str | None = None, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Q&A portefeuille. En mode LLM local (Mistral/Ollama) : réponse SYNCHRONE en croisant
+    toute la base de contrats — plus aucun flow SharePoint. `history` (JSON) = suivi de conversation."""
+    history = None
     if not question:
         question = q
-    if not question and request.method == "POST":
+    if request.method == "POST":
         try:
-            form = await request.form()
-            question = form.get("question") or question
+            data = await request.json()
+            if isinstance(data, dict):
+                question = data.get("question") or question
+                if isinstance(data.get("history"), list):
+                    history = data["history"]
         except Exception:
             try:
-                data = await request.json()
-                if isinstance(data, dict):
-                    question = data.get("question") or question
+                form = await request.form()
+                question = form.get("question") or question
             except Exception:
                 pass
     clean_question = (question or "").strip()
     if not clean_question:
-        return _normalize_global_response("Veuillez saisir une question.", [], [])
+        return {"mode": "local", "status": "answered", "ready": True, "answer": "Veuillez saisir une question.", "bullets": [], "citations": []}
+
+    if _use_local_llm():
+        # portfolio_qa est bloquant (appel GPU distant) → threadpool pour ne pas figer l'event loop.
+        answer = await run_in_threadpool(portfolio_qa, clean_question, db, history)
+        return {"mode": "local", "status": "answered", "ready": True, "answer": answer, "bullets": [], "citations": []}
+
+    # Chemin historique SharePoint/Power Automate (mode cloud uniquement).
     try:
         created = create_sharepoint_list_item(
             list_name=settings.sharepoint_portfolio_questions_list_name,
