@@ -4,6 +4,7 @@ import { api } from '../api.js?v=2';
 import { spinner, errorState, statusBadge, toast, thinkingBar } from '../ui.js?v=2';
 import { navigate } from '../router.js?v=2';
 import { renderChecklist } from './checklist.js?v=2';
+import { contractEditForm } from './contract-form.js?v=2';
 
 export async function renderContractDetail(host, params) {
   mount(host, spinner('Chargement du contrat…'));
@@ -42,12 +43,18 @@ export async function renderContractDetail(host, params) {
           catch (err) { toast(err.message, 'error'); e.target.disabled = false; }
         } })
       : null,
+    el('button', { class: 'btn btn-danger', text: 'Supprimer', onClick: async (e) => {
+      if (!window.confirm('Supprimer définitivement ce contrat (et son analyse) ?')) return;
+      e.target.disabled = true;
+      try { await api.deleteContract(c.id); toast('Contrat supprimé.', 'success'); navigate('/contracts'); }
+      catch (err) { toast(err.message, 'error'); e.target.disabled = false; }
+    } }),
   ]);
 
   const d = daysUntil(c.cancel_deadline);
-  const keyFields = el('section', { class: 'card' }, [
-    el('h2', { class: 'card-title', text: 'Champs clés' }),
-    el('div', { class: 'kv-grid' }, [
+  const kfBody = el('div', {});
+  function kfReadOnly() {
+    mount(kfBody, el('div', { class: 'kv-grid' }, [
       kv('Fournisseur / entité', c.legal_entity || '—'),
       kv('Montant mensuel (MRR)', moneyPrecise(c.amount_mrr)),
       kv('Montant annuel (ARR)', moneyPrecise(c.amount_arr)),
@@ -62,7 +69,18 @@ export async function renderContractDetail(host, params) {
         d != null ? el('span', { class: 'chip ' + (d <= 30 ? 'chip-warn' : 'chip-muted'), text: d >= 0 ? 'J-' + d : 'dépassé' }) : null,
       ])),
       kvNode('Résiliation effective', el('span', { text: dateFR(c.resiliation_effective_date) })),
+    ]));
+  }
+  kfReadOnly();
+  const keyFields = el('section', { class: 'card' }, [
+    el('div', { class: 'card-head' }, [
+      el('h2', { class: 'card-title', text: 'Champs clés' }),
+      el('button', { class: 'btn btn-sm', text: 'Modifier', onClick: () => {
+        // Après enregistrement : re-render complet de la fiche (statuts/labels recalculés par le back).
+        mount(kfBody, contractEditForm(c, () => renderContractDetail(host, params), kfReadOnly));
+      } }),
     ]),
+    kfBody,
   ]);
 
   // Documents annexes

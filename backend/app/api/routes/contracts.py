@@ -1070,15 +1070,25 @@ def delete_contract(contract_id: int, db: Session = Depends(get_db), user=Depend
     obj = db.query(Contract).get(contract_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Not found")
-    try:
-        delete_source_file(
-            source_storage=obj.source_storage,
-            source_filename=obj.source_filename,
-            sharepoint_item_id=obj.sharepoint_item_id,
-            sharepoint_drive_id=obj.sharepoint_drive_id,
-        )
-    except Exception:
-        pass
+    # Ne supprimer le fichier source que si AUCUN autre contrat ne le référence
+    # (les doublons d'analyse partagent le même PDF local).
+    _shared = (
+        db.query(Contract)
+        .filter(Contract.source_filename == obj.source_filename, Contract.id != obj.id)
+        .count()
+        if obj.source_filename
+        else 0
+    )
+    if _shared == 0:
+        try:
+            delete_source_file(
+                source_storage=obj.source_storage,
+                source_filename=obj.source_filename,
+                sharepoint_item_id=obj.sharepoint_item_id,
+                sharepoint_drive_id=obj.sharepoint_drive_id,
+            )
+        except Exception:
+            pass
     for doc in _parse_annex_documents(obj):
         try:
             path = os.path.join(settings.storage_dir, doc["stored_filename"])

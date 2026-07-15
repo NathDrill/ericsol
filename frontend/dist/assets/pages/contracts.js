@@ -40,7 +40,7 @@ export async function renderContracts(host) {
   ));
 
   const analyzeBtn = el('button', { class: 'btn btn-primary', onClick: () => openAnalyzePanel(() => renderContracts(host)) },
-    [icon('upload', 18), el('span', { text: 'Analyser un PDF' })]);
+    [icon('upload', 18), el('span', { text: 'Analyser un contrat' })]);
 
   mount(host, el('div', { class: 'page' }, [
     pageHeader('Contrats', state.items.length + ' contrat' + (state.items.length > 1 ? 's' : '') + ' suivis', [analyzeBtn]),
@@ -68,6 +68,7 @@ function drawList(listHost) {
     el('thead', {}, el('tr', {}, [
       el('th', { text: 'Contrat' }), el('th', { text: 'MRR' }), el('th', { text: 'Récurrence' }),
       el('th', { text: 'Échéance résiliation' }), el('th', { text: 'Reconduction' }), el('th', { text: 'Statut' }),
+      el('th', { attrs: { 'aria-label': 'Actions' } }),
     ])),
     el('tbody', {}, rows.map((c) =>
       el('tr', { class: 'row-click', onClick: () => navigate('/contracts/' + c.id) }, [
@@ -80,6 +81,19 @@ function drawList(listHost) {
         el('td', { text: c.cancel_deadline_label || dateFR(c.cancel_deadline) }),
         el('td', {}, c.has_auto_renewal ? el('span', { class: 'chip chip-muted', text: 'Tacite' }) : el('span', { class: 'muted', text: 'Non' })),
         el('td', {}, statusBadge(c.status)),
+        el('td', { class: 'row-actions' }, el('button', {
+          class: 'icon-btn icon-danger', attrs: { 'aria-label': 'Supprimer le contrat', title: 'Supprimer' },
+          onClick: async (ev) => {
+            ev.stopPropagation();
+            if (!window.confirm(`Supprimer « ${c.title || 'Contrat #' + c.id} » ?`)) return;
+            try {
+              await api.deleteContract(c.id);
+              toast('Contrat supprimé.', 'success');
+              state.items = state.items.filter((x) => x.id !== c.id);
+              drawList(listHost);
+            } catch (err) { toast(err.message, 'error'); }
+          },
+        }, [icon('trash', 16)])),
       ])
     )),
   ]);

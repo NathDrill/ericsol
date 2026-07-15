@@ -61,6 +61,7 @@ export const api = {
   cancellationWindows: (q) => request('GET', '/contracts/cancellation-windows', { query: q }),
   markResilie: (id) => request('PUT', `/contracts/${encodeURIComponent(id)}/marquer-resilie`),
   updateContract: (id, body) => request('PUT', `/contracts/${encodeURIComponent(id)}`, { body }),
+  deleteContract: (id) => request('DELETE', `/contracts/${encodeURIComponent(id)}`),
   analyzePdf: (file) => { const fd = new FormData(); fd.append('file', file); return request('POST', '/contracts/analyze-pdf', { form: fd }); },
   downloadUrl: (id) => `${BASE}/contracts/${encodeURIComponent(id)}/download`,
   downloadRaw: (id) => request('GET', `/contracts/${encodeURIComponent(id)}/download`, { raw: true, query: { inline: 'true' } }),

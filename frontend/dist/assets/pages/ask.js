@@ -7,6 +7,8 @@ import { pageHeader } from '../ui.js?v=2';
 
 // Historique conservé au niveau module : survit aux navigations, pas au rechargement.
 const history = [];
+// Liste des contrats (id + titre) pour rendre les citations cliquables.
+let contractsCache = null;
 
 const SUGGESTIONS = [
   'Combien dépense-t-on par mois chez Orange Business ?',
@@ -14,6 +16,46 @@ const SUGGESTIONS = [
   'Quel est le contrat le plus cher du portefeuille ?',
   'Quels contrats sont en reconduction tacite ?',
 ];
+
+// Rendu inline sûr : **gras** markdown d'abord, puis liens cliquables vers les
+// contrats cités À L'INTÉRIEUR de chaque segment (un lien peut vivre dans un gras).
+// Tout passe par textContent / createElement, jamais d'innerHTML.
+function linkifySegment(text) {
+  let parts = [{ t: text, link: null }];
+  const contracts = (contractsCache || [])
+    .filter((c) => (c.title || '').trim().length >= 6)
+    .sort((a, b) => b.title.length - a.title.length);
+  for (const c of contracts) {
+    const title = c.title.trim();
+    const next = [];
+    for (const p of parts) {
+      if (p.link != null) { next.push(p); continue; }
+      let rest = p.t;
+      let idx;
+      while ((idx = rest.toLowerCase().indexOf(title.toLowerCase())) !== -1) {
+        if (idx > 0) next.push({ t: rest.slice(0, idx), link: null });
+        next.push({ t: rest.slice(idx, idx + title.length), link: c.id });
+        rest = rest.slice(idx + title.length);
+      }
+      if (rest) next.push({ t: rest, link: null });
+    }
+    parts = next;
+  }
+  return parts
+    .filter((p) => p.t)
+    .map((p) => (p.link != null ? el('a', { class: 'msg-link', href: '#/contracts/' + p.link, text: p.t }) : p.t));
+}
+
+function inlineNodes(text) {
+  const out = [];
+  String(text || '').split(/\*\*([^*]+)\*\*/g).forEach((seg, i) => {
+    if (!seg) return;
+    const nodes = linkifySegment(seg);
+    if (i % 2) out.push(el('strong', {}, nodes));
+    else out.push(...nodes);
+  });
+  return out;
+}
 
 // Transforme la réponse texte en paragraphes + listes à puces sûrs.
 function answerNodes(text) {
@@ -24,16 +66,19 @@ function answerNodes(text) {
     if (!line) { list = null; continue; }
     if (/^[-•*]\s+/.test(line)) {
       if (!list) { list = el('ul', { class: 'msg-list' }); nodes.push(list); }
-      list.appendChild(el('li', { text: line.replace(/^[-•*]\s+/, '') }));
+      list.appendChild(el('li', {}, inlineNodes(line.replace(/^[-•*]\s+/, ''))));
     } else {
       list = null;
-      nodes.push(el('p', { text: line }));
+      nodes.push(el('p', {}, inlineNodes(line)));
     }
   }
   return nodes.length ? nodes : [el('p', { text: 'Pas de réponse.' })];
 }
 
 export function renderAsk(host) {
+  if (!contractsCache) {
+    api.contracts().then((d) => { contractsCache = d.items || []; }).catch(() => {});
+  }
   const scroll = el('div', { class: 'chat-scroll', attrs: { 'aria-live': 'polite' } });
   const input = el('input', {
     class: 'input chat-input',
@@ -100,7 +145,12 @@ export function renderAsk(host) {
   }
 
   mount(host, el('div', { class: 'page page-chat' }, [
-    pageHeader('Poser une question', 'L’assistant IA croise les données de tous vos contrats pour vous répondre.'),
+    pageHeader('Poser une question', 'L’assistant IA croise les données de tous vos contrats pour vous répondre.', [
+      el('button', {
+        class: 'btn btn-ghost', text: '+ Nouvelle discussion',
+        onClick: () => { history.length = 0; renderAsk(host); },
+      }),
+    ]),
     el('section', { class: 'card chat-card' }, [
       scroll,
       suggestHost,

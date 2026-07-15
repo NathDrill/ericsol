@@ -7,6 +7,7 @@ import { el, mount, clear, money, dateFR } from '../dom.js?v=2';
 import { api } from '../api.js?v=2';
 import { toast, spinner, thinkingBar } from '../ui.js?v=2';
 import { renderChecklist } from './checklist.js?v=2';
+import { contractEditForm } from './contract-form.js?v=2';
 
 const MAX_MB = 25;
 
@@ -111,8 +112,16 @@ function renderKeyFields(hostEl, n) {
     ['Reconduction', n.has_auto_renewal ? 'Tacite' + (n.renewal_months ? ` (${n.renewal_months} mois)` : '') : 'Non'],
     ['Échéance de résiliation', dateFR(n.cancel_deadline)],
   ];
+  // Le contrat est déjà créé en base : les champs restent modifiables par le client.
+  const editBtn = n.id != null ? el('button', {
+    class: 'btn btn-sm', text: 'Modifier les champs',
+    onClick: () => mount(hostEl, el('div', {}, [
+      el('h3', { class: 'section-title', text: 'Modifier les champs' }),
+      contractEditForm(n, (updated) => renderKeyFields(hostEl, normalize(updated)), () => renderKeyFields(hostEl, n)),
+    ])),
+  }) : null;
   mount(hostEl, el('div', {}, [
-    el('h3', { class: 'section-title', text: 'Champs clés extraits' }),
+    el('div', { class: 'card-head' }, [el('h3', { class: 'section-title', text: 'Champs clés extraits' }), editBtn]),
     el('div', { class: 'kv-grid' }, rows.map(([k, v]) =>
       el('div', { class: 'kv' }, [el('span', { class: 'kv-k', text: k }), el('span', { class: 'kv-v', text: String(v) })])
     )),

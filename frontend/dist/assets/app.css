@@ -189,6 +189,13 @@ h1,h2,h3,h4{margin:0;letter-spacing:-.01em}
 .cl-list{margin:4px 0;padding-left:18px}
 .doc-list{margin:0;padding-left:18px;line-height:1.9}
 
+/* ---------- Édition des champs / suppression ---------- */
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;margin-top:6px}
+.check-row{display:flex;align-items:center;gap:9px;padding:10px 2px}
+.row-actions{text-align:right;width:44px}
+.icon-danger:hover{background:var(--danger-bg);color:var(--danger)}
+@media(max-width:900px){.edit-grid{grid-template-columns:1fr}}
+
 /* ---------- Q&A (fiche contrat) ---------- */
 .qa-row{display:flex;gap:10px}
 .qa-row .input{flex:1}
@@ -208,7 +215,11 @@ h1,h2,h3,h4{margin:0;letter-spacing:-.01em}
 .msg-bubble p{margin:0 0 8px}
 .msg-bubble p:last-child,.msg-bubble ul:last-child{margin-bottom:0}
 .msg-list{margin:0 0 8px;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.msg-list li::marker{color:var(--orange)}
 .msg-error{color:var(--danger);font-weight:600}
+.msg-link{color:var(--primary);font-weight:650;text-decoration:underline;text-decoration-color:rgba(29,99,237,.35);text-underline-offset:2px}
+.msg-link:hover{text-decoration-color:var(--primary)}
+.msg-bubble strong{font-weight:750}
 .ai-avatar{width:32px;height:32px;border-radius:10px;background:var(--accent-orange);color:#fff;font-size:11px;
   font-weight:800;display:grid;place-items:center;flex:none;box-shadow:0 4px 10px rgba(244,114,12,.35)}
 .typing{display:flex;align-items:center;gap:5px;padding:2px 0}
