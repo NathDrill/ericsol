@@ -31,6 +31,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def front_no_stale_cache(request: Request, call_next):
+    """Front en ES modules : le navigateur doit TOUJOURS revalider (no-cache => 304 si inchangé).
+    Sans ça, le cache heuristique garde d'anciens JS apres un deploiement et casse l'app."""
+    response = await call_next(request)
+    if not request.url.path.startswith(settings.api_prefix):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
