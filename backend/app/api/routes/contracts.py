@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, Header, UploadFile, File, Form, HTTPException, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from sqlalchemy import func
 from app.db.session import get_db
 from app.models.contract import Contract
+from app.models.vendor import Vendor
 from app.models.sharepoint_analysis import SharePointAnalysis
 from app.schemas.contracts import ContractsResponse, ContractIn, ContractOut, ContractUpdate
 from app.models.category import Category
 from app.services.contract_service import refresh_contract_statuses, indicators, create_contract
-from app.services.ai_service import build_ai_response as _build_ai_response, _normalize_recurrence as _normalize_recurrence_util
+from app.services.vendor_service import match_vendor as _match_vendor, upsert_vendor as _upsert_vendor
+from app.services.ai_service import build_ai_response as _build_ai_response
+from app.utils.recurrence import normalize_recurrence as _normalize_recurrence
+_normalize_recurrence_util = _normalize_recurrence
+from app.services.ocr_service import extract_pdf_text as _extract_pdf_text_ocr
 from app.services.ai_service import contract_qa as _contract_qa_local, _use_local_llm as _use_local_llm_qa
 from app.utils.file_storage import save_contract_file
 from app.services.source_storage_service import (
@@ -52,28 +57,6 @@ def _anchor_from_checklist(checklist):
 
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
-
-
-def _normalize_recurrence(value: str | None) -> str:
-    raw = (value or "monthly").strip().lower()
-    aliases = {
-        "monthly": "monthly",
-        "mensuel": "monthly",
-        "month": "monthly",
-        "quarterly": "quarterly",
-        "trimestriel": "quarterly",
-        "quarter": "quarterly",
-        "semiannual": "semiannual",
-        "semi-annual": "semiannual",
-        "semestriel": "semiannual",
-        "annual": "annual",
-        "annuel": "annual",
-        "yearly": "annual",
-        "year": "annual",
-        "biannual": "biannual",
-        "biennal": "biannual",
-    }
-    return aliases.get(raw, "monthly")
 
 
 def _contract_checklist(c: Contract) -> dict:
@@ -424,6 +407,19 @@ def _link_pending_sharepoint_analysis(db: Session, contract: Contract) -> None:
     db.refresh(contract)
 
 
+def _vendor_name_of(c: Contract):
+    if not getattr(c, "vendor_id", None):
+        return None
+    try:
+        sess = object_session(c)
+        if sess is None:
+            return None
+        v = sess.get(Vendor, c.vendor_id)
+        return v.name if v else None
+    except Exception:
+        return None
+
+
 def _serialize_contract(c: Contract) -> dict:
     checklist = _contract_checklist(c)
     # Compute a smart deadline: prefer stored cancel_deadline; else compute from effective_date + renewal_months minus notice; else fallback to initial_term_end_date from checklist
@@ -477,6 +473,7 @@ def _serialize_contract(c: Contract) -> dict:
     d = {
         "id": c.id,
         "vendor_id": c.vendor_id,
+        "vendor_name": _vendor_name_of(c),
         "title": c.title,
         "legal_entity": _extract_legal_entity(c, checklist),
         "amount_mrr": round(derived_mrr + 1e-9, 2),
@@ -756,19 +753,81 @@ def analyze(text: str, db: Session = Depends(get_db), user=Depends(get_current_u
     raise HTTPException(status_code=410, detail="Local AI analysis is disabled. Use the Microsoft SharePoint flow.")
 
 
+_VENDOR_LEGAL_FORMS = {
+    "sas", "sasu", "sarl", "sa", "snc", "eurl", "sci", "sc", "scop", "selarl", "scs", "sca",
+    "societe anonyme", "société anonyme", "societe par actions simplifiee", "société par actions simplifiée",
+    "societe a responsabilite limitee", "société à responsabilité limitée",
+    "societe en nom collectif", "société en nom collectif", "societe civile", "société civile",
+}
+
+
+def _clean_vendor_name(name) -> str | None:
+    """Renvoie un nom de fournisseur exploitable, ou None si l'IA n'a extrait qu'une forme
+    juridique (« SAS », « société anonyme »…) ou « Infoclip »."""
+    if not name:
+        return None
+    import re as _re
+    t = _re.split(r"[,(]", str(name))[0]
+    t = _re.sub(r"\s+au capital.*", "", t, flags=_re.I).strip()
+    norm = _re.sub(r"[.\-]", " ", t.lower())
+    norm = _re.sub(r"\s+", " ", norm).strip()
+    bare = _re.sub(r"\s+[àa] associ[ée] unique$", "", norm)
+    if norm in _VENDOR_LEGAL_FORMS or bare in _VENDOR_LEGAL_FORMS:
+        return None
+    if "infoclip" in norm or len(t) < 2:
+        return None
+    return t
+
+
+_ONETIME_KW = ["bon de commande", "convention de commande", "commande d'un", "commande de",
+    "acquisition d", "facture d'achat", "order confirmation", "model 3", "model y", "model s", "model x"]
+# Seuls les mots de LEASING/abonnement empêchent le classement en achat unique.
+_RECURRENT_KW = ["location avec option", "location longue", " loa ", "loa ", "leasing",
+    "credit-bail", "crédit-bail", "location de", "abonnement"]
+
+
+def _amount_guardrail(contract: Contract, analysis: dict, text: str) -> dict | None:
+    """Garde-fou anti-valeurs aberrantes. Détecte un ACHAT UNIQUE (véhicule, commande…)
+    faussement compté en mensualité → recurrence 'one_time', sorti des dépenses récurrentes
+    (montant conservé comme total du contrat). Signale aussi une mensualité anormalement élevée."""
+    # Détection basée sur le TITRE du contrat (le texte entier contient trop de "commande"/"achat"
+    # parasites — n° de commande, options d'achat — qui créent des faux positifs).
+    blob = (analysis.get("contract_label") or contract.title or "").lower()
+    is_onetime = any(k in blob for k in _ONETIME_KW) and not any(k in blob for k in _RECURRENT_KW)
+    if is_onetime:
+        total = round(float(contract.amount_mrr or contract.amount_arr or 0.0), 2)
+        contract.recurrence = "one_time"
+        contract.amount_mrr = 0.0
+        contract.amount_arr = total
+        return {"guardrail": "achat_ponctuel", "total": total}
+    # mensualité aberrante non ponctuelle → flag (pas de modif auto, certains gros mensuels sont légitimes)
+    if (contract.recurrence or "").lower() in ("monthly", "mensuel") and (contract.amount_mrr or 0) > 15000:
+        return {"guardrail": "mensualite_elevee_a_verifier", "amount": contract.amount_mrr}
+    return None
+
+
+def _link_vendor(db: Session, contract: Contract, vendor_name) -> None:
+    clean = _clean_vendor_name(vendor_name)
+    if not clean:
+        return
+    try:
+        m = _match_vendor(db, clean)
+        if m and m.get("vendor_id") and (m.get("score") or 0) >= 90:
+            contract.vendor_id = m["vendor_id"]
+        else:
+            v = _upsert_vendor(db, clean, [])
+            contract.vendor_id = v.id
+    except Exception:
+        pass
+
+
 @router.post("/analyze-pdf")
 def analyze_pdf(file: UploadFile = File(...), db: Session = Depends(get_db), user=Depends(get_current_user)):
     data = file.file.read()
     filename = file.filename or "contrat.pdf"
     stored = store_source_file(filename, data, uploaded_by_email=getattr(user, "email", None))
     # Extraction du texte (pypdf) puis analyse par le LLM on-prem (Mistral). Aucune donnee ne sort.
-    text = ""
-    try:
-        reader = PdfReader(BytesIO(data))
-        for page in reader.pages:
-            text += (page.extract_text() or "") + "\n"
-    except Exception:
-        text = ""
+    text, _used_ocr = _extract_pdf_text_ocr(data)
     try:
         analysis = _build_ai_response(text, db, file_path=None) or {}
     except Exception:
@@ -785,6 +844,8 @@ def analyze_pdf(file: UploadFile = File(...), db: Session = Depends(get_db), use
     )
     # Mapping analyse -> champs du contrat (meme logique que le flux d'analyse existant)
     _apply_cached_sharepoint_analysis(contract, analysis, overwrite=True)
+    _link_vendor(db, contract, analysis.get("vendor_name"))
+    _amount_guardrail(contract, analysis, text)
     db.commit()
     db.refresh(contract)
     return _serialize_contract(contract)
@@ -857,7 +918,7 @@ def cancellation_windows(filter_current: bool = True, horizon_months: int = 24, 
                 row = {
                     "id": c.id,
                     "title": c.title,
-                    "legal_entity": legal_entity,
+                    "legal_entity": legal_entity, "vendor_name": _vendor_name_of(c),
                     "vendor_id": c.vendor_id,
                     "window_start": start.isoformat(),
                     "window_earliest": window_earliest.isoformat(),
@@ -878,7 +939,7 @@ def cancellation_windows(filter_current: bool = True, horizon_months: int = 24, 
             row = {
                 "id": c.id,
                 "title": c.title,
-                "legal_entity": legal_entity,
+                "legal_entity": legal_entity, "vendor_name": _vendor_name_of(c),
                 "vendor_id": c.vendor_id,
                 "window_start": start.isoformat(),
                 "window_earliest": window_earliest.isoformat(),
@@ -1211,8 +1272,6 @@ def mark_resilie(contract_id: int, effective_date: str | None = None, db: Sessio
             pass
     db.commit()
     return {"ok": True}
-
-
 
 
 @router.post("/{contract_id:int}/documents")

@@ -10,6 +10,7 @@ except Exception:  # pragma: no cover
     OpenAI = None  # type: ignore
 from .ai_settings_service import AISettings  # for typing
 import os
+from app.utils.recurrence import normalize_recurrence as _normalize_recurrence
 
 # ==== LLM LOCAL (Ollama/Mistral) — plus AUCUN appel OpenAI ====
 def _llm_base_url():
@@ -27,7 +28,6 @@ def _llm_client(api_key=None):
     base = _llm_base_url()
     key = api_key or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or "local"
     return OpenAI(api_key=key, base_url=base) if base else OpenAI(api_key=key)
-
 
 
 def _get_model(ai: AISettings | None, fallback: str = "gpt-4.1") -> str:
@@ -67,32 +67,6 @@ def _extract_amount_currency(text: str) -> tuple[float, str]:
             cur = m.group("currency").upper().replace("€", "EUR").replace("EURO", "EUR").replace("$", "USD")
             return amt, cur
     return 0.0, "EUR"
-
-
-def _normalize_recurrence(value: str | None) -> str:
-    raw = (value or "").strip().lower()
-    aliases = {
-        "mensuel": "monthly",
-        "mensuelle": "monthly",
-        "monthly": "monthly",
-        "trimestriel": "quarterly",
-        "trimestrielle": "quarterly",
-        "quarterly": "quarterly",
-        "semestriel": "semiannual",
-        "semestrielle": "semiannual",
-        "semiannual": "semiannual",
-        "semi-annual": "semiannual",
-        "semiannuel": "semiannual",
-        "semiannuelle": "semiannual",
-        "annuel": "annual",
-        "annuelle": "annual",
-        "annual": "annual",
-        "yearly": "annual",
-        "biannual": "biannual",
-        "biennal": "biannual",
-        "biennale": "biannual",
-    }
-    return aliases.get(raw, raw or "monthly")
 
 
 def _detect_recurrence(text: str) -> str:
